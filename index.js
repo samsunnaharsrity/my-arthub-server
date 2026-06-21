@@ -57,11 +57,20 @@ app.get("/api/artWorks", async (req, res) => {
   res.json(result);
 });
 
+app.get('/api/artWorks', async(req , res) => {
+  const cursor = artWorksCollection.find();
+  const result = await cursor.toArray()
+  res.send(result)
+})
+
     app.post("/api/artWorks", async (req, res) => {
       try {
         const artWork = req.body;
-
-        const result = await artWorksCollection.insertOne(artWork);
+        const newArtWork = {
+          ...artWork,
+          createdAt:new Date()
+        }
+        const result = await artWorksCollection.insertOne(newArtWork);
 
         res.status(201).json({
           success: true,
@@ -80,10 +89,29 @@ app.get("/api/artWorks", async (req, res) => {
 
 
     // artist profile
+
+app.get("/api/artistProfile", async (req, res) => {
+  const query = {};
+
+  if (req.query.userId) {
+    query.userId = req.query.userId;
+  }
+
+  const result = await artistProfileCollection
+    .findOne(query)
+
+  res.send(result);
+});
+
+
+
         app.post("/api/artistProfile", async (req, res) => {
       try {
         const artistProfile = req.body;
-
+        const newArtistProfile ={
+          ...artistProfile,
+          createdAt: new Date()
+        }
         const result = await artistProfileCollection.insertOne(artistProfile);
 
         res.status(201).json({
