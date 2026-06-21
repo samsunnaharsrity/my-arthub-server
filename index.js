@@ -159,15 +159,36 @@ app.get("/api/artWorks/:id", async (req, res) => {
 
 
   //PURCHASE ARTS 
-  app.post('/api/purchase', async(req , res) => {
-    const purchase = req.body;
-    const newPurchase = {
-      ...purchase,
-      createdAt: new Date()
-    }
-    const result = await purchaseCollection.insertOne(newPurchase)
-    res.send(result)
-  })
+
+app.get("/api/purchase", async (req, res) => {
+  const query = {};
+
+  if (req.query.buyerId) {
+    query.buyerId = req.query.buyerId;
+  }
+
+  if (req.query.artWorkId) {
+    query.artWorkId = req.query.artWorkId;
+  }
+
+  const result = await purchaseCollection.find(query).toArray();
+
+  res.send(result);
+});
+
+
+  app.post("/api/purchase", async (req, res) => {
+  const purchaseData = req.body;
+
+  const result = await purchaseCollection.insertOne(
+    purchaseData
+  );
+
+  res.send({
+    insertedId: result.insertedId,
+    success: true,
+  });
+});
 
 
     await client.db("admin").command({ ping: 1 });
