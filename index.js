@@ -8,6 +8,7 @@ app.use(cors());
 app.use(express.json())
 
 const { MongoClient, ServerApiVersion } = require('mongodb');
+const { ObjectId } = require("mongodb");
 
 
 app.get('/', (req, res) => {
@@ -37,6 +38,7 @@ async function run() {
     const database = client.db("arthub");
     const artWorksCollection = database.collection("artWorks");
     const artistProfileCollection = database.collection("artistProfile");
+    const purchaseCollection =database.collection("purchase")
 
 
     // artWorks
@@ -103,31 +105,69 @@ app.get("/api/artistProfile", async (req, res) => {
   res.send(result);
 });
 
+app.post("/api/artistProfile", async (req, res) => {
+try {
+  const artistProfile = req.body;
+  const newArtistProfile ={
+    ...artistProfile,
+    createdAt: new Date()
+  }
+  const result = await artistProfileCollection.insertOne(artistProfile);
 
+  res.status(201).json({
+    success: true,
+    insertedId: result.insertedId,
+    message: "Artist Profile Created successfully",
+  });
+} catch (error) {
+  console.error(error);
 
-        app.post("/api/artistProfile", async (req, res) => {
-      try {
-        const artistProfile = req.body;
-        const newArtistProfile ={
-          ...artistProfile,
-          createdAt: new Date()
-        }
-        const result = await artistProfileCollection.insertOne(artistProfile);
+  res.status(500).json({
+    success: false,
+    message: error.message,
+  });
+}
+});
 
-        res.status(201).json({
-          success: true,
-          insertedId: result.insertedId,
-          message: "Artist Profile Created successfully",
-        });
-      } catch (error) {
-        console.error(error);
+// artwork id
 
-        res.status(500).json({
-          success: false,
-          message: error.message,
-        });
-      }
+app.get("/api/artWorks/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+
+    const artwork = await artWorksCollection.findOne({
+      _id: new ObjectId(id),
     });
+
+    if (!artwork) {
+      return res.status(404).json({
+        success: false,
+        message: "Artwork not found",
+      });
+    }
+
+    res.json(artwork);
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      success: false,
+      message: "Invalid ID or server error",
+    });
+  }
+});
+
+
+  //PURCHASE ARTS 
+  app.post('/api/purchase', async(req , res) => {
+    const purchase = req.body;
+    const newPurchase = {
+      ...purchase,
+      createdAt: new Date()
+    }
+    const result = await purchaseCollection.insertOne(newPurchase)
+    res.send(result)
+  })
 
 
     await client.db("admin").command({ ping: 1 });
