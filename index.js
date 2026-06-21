@@ -38,7 +38,8 @@ async function run() {
     const database = client.db("arthub");
     const artWorksCollection = database.collection("artWorks");
     const artistProfileCollection = database.collection("artistProfile");
-    const purchaseCollection =database.collection("purchase")
+    const purchaseCollection =database.collection("purchase");
+    const planCollection =database.collection("plans")
 
 
     // artWorks
@@ -189,6 +190,19 @@ app.get("/api/purchase", async (req, res) => {
     success: true,
   });
 });
+
+
+// pricing plan
+
+app.get('/api/plans' , async(res , req) => {
+  const query ={};
+  if(res.query.plan_id){
+    query.id = req.query.plan_id
+  }
+
+  const plan = await planCollection.findOne(query);
+  res.send(plan)
+})
 
 
     await client.db("admin").command({ ping: 1 });
