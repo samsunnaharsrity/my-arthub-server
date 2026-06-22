@@ -42,6 +42,7 @@ async function run() {
     const plansCollection =database.collection("plans");
     const usersCollection = database.collection("user")
     const subscriptionCollection = database.collection('subscription');
+    const commentsCollection = database.collection('comments');
 
 // user collection
 
@@ -282,7 +283,7 @@ app.post('/api/subscriptions', async (req, res) => {
       { email: data.email },
       {
         $set: {
-          plan: finalPlan, 
+          planId: finalPlan, 
           updatedAt: new Date()
         }
       }
@@ -304,6 +305,50 @@ app.post('/api/subscriptions', async (req, res) => {
   }
 });
 
+
+// comments
+
+app.get("/api/comments", async (req, res) => {
+  try {
+    const { artworkId } = req.query;
+
+    if (!artworkId) {
+      return res.status(400).send({
+        success: false,
+        message: "artworkId required",
+      });
+    }
+
+    const comments = await commentsCollection
+      .find({ artworkId })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    // 🔥 build threaded structure (Instagram style)
+    const map = {};
+    const roots = [];
+
+    comments.forEach((c) => {
+      c.replies = [];
+      map[c._id.toString()] = c;
+    });
+
+    comments.forEach((c) => {
+      if (c.parentId) {
+        map[c.parentId]?.replies.push(c);
+      } else {
+        roots.push(c);
+      }
+    });
+
+    res.send(roots);
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
 
     await client.db("admin").command({ ping: 1 });
 
