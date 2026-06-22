@@ -5,7 +5,7 @@ const app = express();
 const port = 7000;
 
 app.use(cors());
-app.use(express.json())
+app.use(express.json()) 
 
 const { MongoClient, ServerApiVersion } = require('mongodb');
 const { ObjectId } = require("mongodb");
@@ -320,11 +320,10 @@ app.get("/api/comments", async (req, res) => {
     }
 
     const comments = await commentsCollection
-      .find({ artworkId })
+      .find({ artworkId: String(artworkId) })
       .sort({ createdAt: -1 })
       .toArray();
 
-    // 🔥 build threaded structure (Instagram style)
     const map = {};
     const roots = [];
 
@@ -349,6 +348,82 @@ app.get("/api/comments", async (req, res) => {
     });
   }
 });
+
+
+
+app.post("/api/comments", async (req, res) => {
+  try {
+    const {
+      artworkId,
+      text,
+      userId,
+      userName,
+      userAvatar,
+      parentId = null,
+    } = req.body;
+
+    if (!artworkId || !text) {
+      return res.status(400).send({
+        success: false,
+        message: "artworkId and text required",
+      });
+    }
+
+    const newComment = {
+      artworkId: String(artworkId), 
+      text,
+      userId,
+      userName,
+      userAvatar: userAvatar || "",
+      parentId: parentId ? String(parentId) : null,
+      likes: [],
+      createdAt: new Date(),
+    };
+
+    const result = await commentsCollection.insertOne(newComment);
+
+    res.send({
+      success: true,
+      comment: { ...newComment, _id: result.insertedId },
+    });
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+// LIKE UPDATE
+app.post("/api/comments/like", async (req, res) => {
+  try {
+    const { commentId, userId } = req.body;
+
+    if (!commentId || !userId) {
+      return res.status(400).send({ success: false, message: "commentId and userId required" });
+    }
+
+    const comment = await commentsCollection.findOne({ _id: new ObjectId(commentId) });
+    if (!comment) {
+      return res.status(404).send({ success: false, message: "Comment not found" });
+    }
+    const isLiked = comment.likes?.includes(userId);
+    const updateDoc = isLiked 
+      ? { $pull: { likes: userId } } 
+      : { $addToSet: { likes: userId } };
+
+    await commentsCollection.updateOne({ _id: new ObjectId(commentId) }, updateDoc);
+    const updatedComment = await commentsCollection.findOne({ _id: new ObjectId(commentId) });
+
+    res.send({ success: true, likes: updatedComment.likes });
+  } catch (error) {
+    res.status(500).send({ success: false, message: error.message });
+  }
+});
+
+
+
+
 
     await client.db("admin").command({ ping: 1 });
 
