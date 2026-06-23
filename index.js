@@ -190,19 +190,34 @@ app.get("/api/artWorks/:id", async (req, res) => {
   //PURCHASE ARTS 
 
 app.get("/api/purchase", async (req, res) => {
-  const query = {};
+  try {
+    const { buyerId, page = 1, limit = 6 } = req.query;
 
-  if (req.query.buyerId) {
-    query.buyerId = req.query.buyerId;
+    const query = {};
+    if (buyerId) query.buyerId = buyerId;
+
+    const skip = (Number(page) - 1) * Number(limit);
+
+    const total = await purchaseCollection.countDocuments(query);
+
+    const items = await purchaseCollection
+      .find(query)
+      .sort({ createdAt: -1 })  
+      .skip(skip)
+      .limit(Number(limit))
+      .toArray();
+
+    res.send({
+      items,
+      total,
+    
+    });
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
   }
-
-  if (req.query.artWorkId) {
-    query.artWorkId = req.query.artWorkId;
-  }
-
-  const result = await purchaseCollection.find(query).toArray();
-
-  res.send(result);
 });
 
 
@@ -369,16 +384,16 @@ app.post("/api/comments", async (req, res) => {
       });
     }
 
-    const newComment = {
-      artworkId: String(artworkId), 
-      text,
-      userId,
-      userName,
-      userAvatar: userAvatar || "",
-      parentId: parentId ? String(parentId) : null,
-      likes: [],
-      createdAt: new Date(),
-    };
+const newComment = {
+  artworkId: String(artworkId),
+  text,
+  userId,
+  userName: userName || "Anonymous",
+  userAvatar: userAvatar || "",
+  parentId: parentId ? String(parentId) : null,
+  likes: [],
+  createdAt: new Date(),
+};
 
     const result = await commentsCollection.insertOne(newComment);
 
@@ -395,6 +410,7 @@ app.post("/api/comments", async (req, res) => {
 });
 
 // LIKE UPDATE
+
 app.post("/api/comments/like", async (req, res) => {
   try {
     const { commentId, userId } = req.body;
