@@ -50,15 +50,37 @@ app.post("/api/users", async (req, res) => {
   try {
     const userData = req.body;
     
-    const existingUser = await usersCollection.findOne({ email: userData.email });
+    
+    const existingUser = await usersCollection.findOne({
+      email: userData.email
+    });
+
     if (existingUser) {
-      return res.status(400).json({ success: false, message: "User already exists" });
+
+      if (!existingUser.planId) {
+        await usersCollection.updateOne(
+          { email: userData.email },
+          {
+            $set: {
+              plan: "user_free",
+              planId: "user_free",
+              updatedAt: new Date()
+            }
+          }
+        );
+      }
+
+      return res.send({
+        success: true,
+        message: "User already exists"
+      });
     }
 
     const newUser = {
       ...userData,
       role: "user",
-      plan: "free",
+      planId: "user_free",
+      plan: "user_free",
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -68,6 +90,24 @@ app.post("/api/users", async (req, res) => {
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
+});
+
+
+app.get("/api/users", async (req, res) => {
+  const { email } = req.query;
+
+  const user = await usersCollection.findOne({
+    email: email?.trim().toLowerCase()
+  });
+
+  if (!user) return res.send(null);
+
+  return res.send({
+    ...user,
+    role: user.role || "user",
+    plan: user.plan || "user_free",
+    planId: user.planId || "user_free",
+  });
 });
 
     // artWorks
@@ -224,8 +264,13 @@ app.get("/api/purchase", async (req, res) => {
   app.post("/api/purchase", async (req, res) => {
   const purchaseData = req.body;
 
+  const newPurchaseData = {
+    ...purchaseData,
+    createdAt: new Date()
+  }
+
   const result = await purchaseCollection.insertOne(
-    purchaseData
+    newPurchaseData
   );
 
   res.send({
@@ -365,7 +410,6 @@ app.get("/api/comments", async (req, res) => {
 });
 
 
-
 app.post("/api/comments", async (req, res) => {
   try {
     const {
@@ -409,6 +453,29 @@ const newComment = {
   }
 });
 
+app.get("/api/comments/user/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const comments = await commentsCollection
+      .find({ userId })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.send({
+      success: true,
+      total: comments.length,
+      items: comments
+    });
+
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
 // LIKE UPDATE
 
 app.post("/api/comments/like", async (req, res) => {
@@ -438,8 +505,69 @@ app.post("/api/comments/like", async (req, res) => {
 });
 
 
+app.get("/api/users", async (req, res) => {
+  const { email } = req.query;
+
+  const user = await usersCollection.findOne({
+    email: email?.trim().toLowerCase()
+  });
+
+  res.send(user);
+});
+
+app.get("/api/users/:email", async (req, res) => {
+  try {
+    const email = req.params.email;
+
+    const user = await usersCollection.findOne({
+      email: email.trim().toLowerCase()
+    });
+
+    if (!user) {
+      return res.status(404).send({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    res.send(user);
+
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message
+    });
+  }
+});
 
 
+// DELETE BTN FROM ARTIST ARTWORK
+
+app.delete("/api/artWorks/:id", async (req, res) => {
+  const id = req.params.id;
+
+  const result = await artWorksCollection.deleteOne({
+    _id: new ObjectId(id),
+  });
+
+  res.send(result);
+});
+
+
+// EDIT ARTWORK DATA
+app.put("/api/artWorks/:id", async (req, res) => {
+  const id = req.params.id;
+  const updatedData = req.body;
+
+  const result = await artWorksCollection.updateOne(
+    { _id: new ObjectId(id) },
+    {
+      $set: updatedData,
+    }
+  );
+
+  res.send(result);
+});
 
     await client.db("admin").command({ ping: 1 });
 
