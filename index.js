@@ -17,10 +17,7 @@ app.get('/', (req, res) => {
 
 // mongodb
 
-
-
 const uri = process.env.MONGODB_URI;
-
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
@@ -43,6 +40,7 @@ async function run() {
     const usersCollection = database.collection("user")
     const subscriptionCollection = database.collection('subscription');
     const commentsCollection = database.collection('comments');
+    const settingsCollection = database.collection("settings");
 
 // user collection
 
@@ -93,22 +91,22 @@ app.post("/api/users", async (req, res) => {
 });
 
 
-app.get("/api/users", async (req, res) => {
-  const { email } = req.query;
+// app.get("/api/users", async (req, res) => {
+//   const { email } = req.query;
 
-  const user = await usersCollection.findOne({
-    email: email?.trim().toLowerCase()
-  });
+//   const user = await usersCollection.findOne({
+//     email: email?.trim().toLowerCase()
+//   });
 
-  if (!user) return res.send(null);
+//   if (!user) return res.send(null);
 
-  return res.send({
-    ...user,
-    role: user.role || "user",
-    plan: user.plan || "user_free",
-    planId: user.planId || "user_free",
-  });
-});
+//   return res.send({
+//     ...user,
+//     role: user.role || "user",
+//     plan: user.plan || "user_free",
+//     planId: user.planId || "user_free",
+//   });
+// });
 
     // artWorks
 app.get("/api/artWorks", async (req, res) => {
@@ -133,8 +131,36 @@ app.get("/api/artWorks", async (req, res) => {
 //   const result = await cursor.toArray()
 //   res.send(result)
 // })
+app.get("/api/users", async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (email) {
+      const user = await usersCollection.findOne({
+        email: email.trim().toLowerCase(),
+      });
 
-    app.post("/api/artWorks", async (req, res) => {
+      if (!user) {
+        return res.send(null);
+      }
+
+      return res.send(user);
+    }
+    // All users
+    const users = await usersCollection.find().toArray();
+
+    res.send(users);
+
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+
+// ARTWORKS
+app.post("/api/artWorks", async (req, res) => {
       try {
         const artWork = req.body;
         const newArtWork = {
@@ -505,15 +531,15 @@ app.post("/api/comments/like", async (req, res) => {
 });
 
 
-app.get("/api/users", async (req, res) => {
-  const { email } = req.query;
+// app.get("/api/users", async (req, res) => {
+//   const { email } = req.query;
 
-  const user = await usersCollection.findOne({
-    email: email?.trim().toLowerCase()
-  });
+//   const user = await usersCollection.findOne({
+//     email: email?.trim().toLowerCase()
+//   });
 
-  res.send(user);
-});
+//   res.send(user);
+// });
 
 app.get("/api/users/:email", async (req, res) => {
   try {
@@ -536,6 +562,34 @@ app.get("/api/users/:email", async (req, res) => {
     res.status(500).send({
       success: false,
       message: error.message
+    });
+  }
+});
+
+// UPDATE USER
+
+app.patch("/api/users/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const { role } = req.body;
+
+    const result = await usersCollection.updateOne(
+      { _id: new ObjectId(id) },
+      {
+        $set: {
+          role,
+        },
+      }
+    );
+    res.send({
+      success: true,
+      message: "Role updated successfully",
+      result,
+    });
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
     });
   }
 });
@@ -604,6 +658,106 @@ app.patch("/api/artWorks/reject/:id", async (req, res) => {
 
   res.send(result);
 });
+
+
+// SETTINGS
+
+app.get("/api/settings", async (req, res) => {
+  try {
+    const settings = await settingsCollection.findOne({ type: "site_settings" });
+
+    if (!settings) {
+      return res.send({
+        siteName: "ArtHub",
+        contactEmail: "admin@arthub.com",
+        currency: "USD",
+        maintenanceMode: false,
+        autoApproveArtwork: false,
+      });
+    }
+
+    res.send({
+  siteName: settings.data.siteName,
+  contactEmail: settings.data.contactEmail,
+  currency: settings.data.currency,
+  maintenanceMode: settings.data.maintenanceMode,
+  autoApproveArtwork: settings.data.autoApproveArtwork,
+});
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+app.post("/api/settings", async (req, res) => {
+  try {
+    const data = req.body;
+
+    const result = await settingsCollection.updateOne(
+      { type: "site_settings" },
+      {
+        $set: {
+          type: "site_settings",
+          data,
+          updatedAt: new Date(),
+        },
+      },
+      { upsert: true }
+    );
+
+    res.send({
+      success: true,
+      message: "Settings saved successfully",
+      result,
+    });
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+// ANALYTICS DATA
+// app.get("/api/analytics", async (req, res) => {
+//   try {
+//     const result = await purchaseCollection
+//       .aggregate([
+//         {
+//           $group: {
+//             _id: {
+//               $dateToString: {
+//                 format: "%d-%m-%Y",
+//                 date: "$createdAt",
+//               },
+//             },
+//             sales: { $sum: 1 },
+//           },
+//         },
+//         {
+//           $project: {
+//             _id: 0,
+//             day: "$_id",
+//             sales: 1,
+//           },
+//         },
+//         {
+//           $sort: {
+//             day: 1,
+//           },
+//         },
+//       ])
+//       .toArray();
+
+//     res.send(result);
+//   } catch (error) {
+//     res.status(500).send({
+//       message: error.message,
+//     });
+//   }
+// });
 
     await client.db("admin").command({ ping: 1 });
 
