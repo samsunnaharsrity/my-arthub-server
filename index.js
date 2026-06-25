@@ -743,43 +743,37 @@ app.delete("/api/admin/artworks/:id", async (req, res) => {
 });
 
 // ANALYTICS DATA
-// app.get("/api/analytics", async (req, res) => {
-//   try {
-//     const result = await purchaseCollection
-//       .aggregate([
-//         {
-//           $group: {
-//             _id: {
-//               $dateToString: {
-//                 format: "%d-%m-%Y",
-//                 date: "$createdAt",
-//               },
-//             },
-//             sales: { $sum: 1 },
-//           },
-//         },
-//         {
-//           $project: {
-//             _id: 0,
-//             day: "$_id",
-//             sales: 1,
-//           },
-//         },
-//         {
-//           $sort: {
-//             day: 1,
-//           },
-//         },
-//       ])
-//       .toArray();
+app.get("/api/analytics/categories", async (req, res) => {
+  try {
+    const result = await artWorksCollection.aggregate([
+      {
+        $group: {
+          _id: "$category",
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          category: "$_id",
+          count: 1
+        }
+      },
+      {
+        $sort: {
+          count: -1
+        }
+      }
+    ]).toArray();
 
-//     res.send(result);
-//   } catch (error) {
-//     res.status(500).send({
-//       message: error.message,
-//     });
-//   }
-// });
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message
+    });
+  }
+});
 
     await client.db("admin").command({ ping: 1 });
 
