@@ -720,6 +720,28 @@ app.post("/api/settings", async (req, res) => {
   }
 });
 
+
+// ADMIN ARTWORKS
+app.get("/api/admin/artworks", async (req, res) => {
+  const artworks = await artWorksCollection
+    .find()
+    .sort({ createdAt: -1 })
+    .toArray();
+
+  res.send(artworks);
+});
+
+app.delete("/api/admin/artworks/:id", async (req, res) => {
+  const result = await artWorksCollection.deleteOne({
+    _id: new ObjectId(req.params.id),
+  });
+
+  res.send({
+    success: true,
+    result,
+  });
+});
+
 // ANALYTICS DATA
 // app.get("/api/analytics", async (req, res) => {
 //   try {
