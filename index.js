@@ -128,11 +128,11 @@ app.get("/api/artWorks", async (req, res) => {
   res.json(result);
 });
 
-app.get('/api/artWorks', async(req , res) => {
-  const cursor = artWorksCollection.find();
-  const result = await cursor.toArray()
-  res.send(result)
-})
+// app.get('/api/artWorks', async(req , res) => {
+//   const cursor = artWorksCollection.find();
+//   const result = await cursor.toArray()
+//   res.send(result)
+// })
 
     app.post("/api/artWorks", async (req, res) => {
       try {
@@ -555,14 +555,50 @@ app.delete("/api/artWorks/:id", async (req, res) => {
 
 
 // EDIT ARTWORK DATA
-app.put("/api/artWorks/:id", async (req, res) => {
+app.patch("/api/artWorks/:id", async (req, res) => {
   const id = req.params.id;
-  const updatedData = req.body;
+  const body = req.body;
+
+  console.log("ID:", id);
+  console.log("BODY:", body);
 
   const result = await artWorksCollection.updateOne(
     { _id: new ObjectId(id) },
     {
-      $set: updatedData,
+      $set: body,
+    }
+  );
+
+  res.send(result);
+});
+
+// APPROVE REJECT AND DELETE
+
+app.patch("/api/artWorks/approve/:id", async (req, res) => {
+  const id = req.params.id;
+
+  const result = await artWorksCollection.updateOne(
+    { _id: new ObjectId(id) },
+    {
+      $set: {
+        status: "approved",
+      },
+    }
+  );
+
+  res.send(result);
+});
+
+
+app.patch("/api/artWorks/reject/:id", async (req, res) => {
+  const id = req.params.id;
+
+  const result = await artWorksCollection.updateOne(
+    { _id: new ObjectId(id) },
+    {
+      $set: {
+        status: "rejected",
+      },
     }
   );
 
