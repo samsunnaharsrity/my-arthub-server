@@ -907,8 +907,48 @@ app.get("/api/transactions", async (req, res) => {
   }
 });
 
+// ADMIN DASHBOARD
+app.get("/api/analytics/overview", async (req, res) => {
+  try {
+    const totalUsers =
+      await usersCollection.countDocuments();
 
+    const totalArtworks =
+      await artWorksCollection.countDocuments();
 
+    const totalSales =
+      await purchaseCollection.countDocuments();
+
+    const revenueResult =
+      await purchaseCollection.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalRevenue: {
+              $sum: {
+                $toDouble: "$price",
+              },
+            },
+          },
+        },
+      ]).toArray();
+
+    const totalRevenue =
+      revenueResult[0]?.totalRevenue || 0;
+
+    res.send({
+      totalUsers,
+      totalArtworks,
+      totalSales,
+      totalRevenue,
+    });
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
 
 
 
