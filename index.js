@@ -824,6 +824,89 @@ app.get("/api/analytics/sales", async (req, res) => {
 
 
 
+// transaction data 
+app.get("/api/transactions", async (req, res) => {
+  try {
+    const { page = 1, limit = 10, type } = req.query;
+
+    const pageNum = Number(page);
+    const limitNum = Number(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    const pipeline = [
+      // Purchase Collection
+      {
+        $project: {
+          _id: 1,
+          type: { $literal: "purchase" },
+          email: { $ifNull: ["$buyerEmail", "$userEmail"] },
+          amount: { $ifNull: ["$amount", "$price"] },
+          planId: { $literal: null },
+          createdAt: 1,
+        },
+      },
+
+      // Subscription Collection
+      {
+        $unionWith: {
+          coll: "subscription",
+          pipeline: [
+            {
+              $project: {
+                _id: 1,
+                type: { $literal: "subscription" },
+                email: "$email",
+                amount: { $ifNull: ["$amount", 0] },
+                planId: "$planId",
+                createdAt: 1,
+              },
+            },
+          ],
+        },
+      },
+    ];
+
+    // Filter
+    if (type) {
+      pipeline.push({
+        $match: { type },
+      });
+    }
+
+    // Total Count
+    const countResult = await purchaseCollection
+      .aggregate([...pipeline, { $count: "total" }])
+      .toArray();
+
+    const total = countResult[0]?.total || 0;
+
+    // Pagination
+    const items = await purchaseCollection
+      .aggregate([
+        ...pipeline,
+        { $sort: { createdAt: -1 } },
+        { $skip: skip },
+        { $limit: limitNum },
+      ])
+      .toArray();
+
+    res.send({
+      success: true,
+      total,
+      page: pageNum,
+      limit: limitNum,
+      items,
+    });
+  } catch (error) {
+    console.log(error);
+
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
 
 
 
