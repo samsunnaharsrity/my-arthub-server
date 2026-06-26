@@ -747,33 +747,87 @@ app.get("/api/analytics/categories", async (req, res) => {
   try {
     const result = await artWorksCollection.aggregate([
       {
-        $group: {
-          _id: "$category",
-          count: { $sum: 1 }
+        $match: {
+          category: { $exists: true, $ne: null }
         }
+      },
+      {
+        $group: {
+          _id: { $toLower: { $trim: { input: "$category" } } },
+          count: { $sum: 1 },
+        },
+      },
+    ]).toArray();
+
+    const FIXED_CATEGORIES = [
+      "Painting",
+      "Digital",
+      "Photography",
+      "Illustration",
+      "Sculpture",
+      "Abstract",
+    ];
+
+    const map = {};
+    result.forEach((item) => {
+      map[item._id] = item.count;
+    });
+
+    const finalData = FIXED_CATEGORIES.map((cat) => ({
+      category: cat,
+      count: map[cat.toLowerCase()] || 0,
+    }));
+
+    res.json(finalData);
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
+// SALES CATEGORY
+app.get("/api/analytics/sales", async (req, res) => {
+  try {
+    const result = await purchaseCollection.aggregate([
+      {
+        $match: {
+          createdAt: { $exists: true }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: {
+              format: "%Y-%m-%d",
+              date: "$createdAt",
+            },
+          },
+          totalSales: { $sum: 1 },
+        },
       },
       {
         $project: {
           _id: 0,
-          category: "$_id",
-          count: 1
-        }
+          date: "$_id",
+          totalSales: 1,
+        },
       },
       {
-        $sort: {
-          count: -1
-        }
-      }
+        $sort: { date: 1 },
+      },
     ]).toArray();
 
     res.send(result);
   } catch (error) {
-    res.status(500).send({
-      success: false,
-      message: error.message
-    });
+    res.status(500).send({ message: error.message });
   }
 });
+
+
+
+
+
+
+
 
     await client.db("admin").command({ ping: 1 });
 
