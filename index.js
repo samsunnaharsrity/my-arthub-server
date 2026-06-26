@@ -950,6 +950,56 @@ app.get("/api/analytics/overview", async (req, res) => {
   }
 });
 
+// ADMIN COMMENTS ID
+
+app.get("/api/admin/comments", async (req, res) => {
+  try {
+    const comments = await commentsCollection
+      .find()
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.send(comments);
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+// DELETE ADMIN COMMENT
+app.delete("/api/admin/comments/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    console.log("Deleting comment:", id);
+
+    const result = await commentsCollection.deleteOne({
+      _id: new ObjectId(id),
+    });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).send({
+        success: false,
+        message: "Comment not found",
+      });
+    }
+
+    res.send({
+      success: true,
+      message: "Comment deleted successfully",
+    });
+  } catch (error) {
+    console.log(error);
+
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
 
 
     await client.db("admin").command({ ping: 1 });
