@@ -7,7 +7,7 @@ const port = 7000;
 app.use(
   cors({
     origin: [
-      "https://my-arthub.vercel.app",
+      "http://localhost:3000",
       "https://your-vercel-app.vercel.app",
     ],
     credentials: true,
@@ -29,8 +29,6 @@ const logger = (req , res , next) =>{
   console.log('logger', req.params);
   next();
 }
-
-
 
 // mongodb
 
@@ -338,19 +336,6 @@ app.get("/api/artWorks/:id", async (req, res) => {
 
 
     // artist profile
-
-app.get("/api/artistProfile", async (req, res) => {
-  const query = {};
-
-  if (req.query.userId) {
-    query.userId = req.query.userId;
-  }
-
-  const result = await artistProfileCollection
-    .findOne(query)
-
-  res.send(result);
-});
 
 app.post("/api/artistProfile",logger,
   verifyToken,
@@ -1242,6 +1227,16 @@ app.get("/api/admin/comments",logger,
   }
 });
 
+// USER COMMENT
+app.get("/api/comments/user/:userId", async (req, res) => {
+  const { userId } = req.params;
+
+  const comments = await commentsCollection
+    .find({ userId })
+    .toArray();
+});
+
+
 // DELETE ADMIN COMMENT
 app.delete("/api/admin/comments/:id",logger,
   verifyToken,
@@ -1510,8 +1505,7 @@ app.get("/api/artistProfile", async (req, res) => {
   }
 });
 
-app.post(
-  "/api/artistProfile",
+app.post("/api/artistProfile",
   logger,
   verifyToken,
   verifyArtist,
