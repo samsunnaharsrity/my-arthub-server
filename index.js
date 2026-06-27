@@ -7,7 +7,7 @@ const port = 7000;
 app.use(
   cors({
     origin: [
-      "http://localhost:3000",
+      "https://my-arthub.vercel.app",
       "https://your-vercel-app.vercel.app",
     ],
     credentials: true,
