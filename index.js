@@ -436,33 +436,6 @@ app.get("/api/artistProfile/all", async (req, res) => {
 //   }
 // });
 
-app.get("/api/artWorks/:id", verifyToken, async (req, res) => {
-  try {
-    const id = req.params.id;
-
-    if (!ObjectId.isValid(id)) {
-      return res.status(400).json({ message: "Invalid artwork id" });
-    }
-
-    const artwork = await artWorksCollection.findOne({
-      _id: new ObjectId(id),
-    });
-
-    if (!artwork) {
-      return res.status(404).json({
-        success: false,
-        message: "Artwork not found",
-      });
-    }
-
-    res.json(artwork);
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-});
 
 
   //PURCHASE ARTS 
