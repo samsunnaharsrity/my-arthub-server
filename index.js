@@ -305,17 +305,16 @@ app.post("/api/artWorks" ,logger,
       }
     });
 
-    app.get("/api/artWorks/:id", async (req, res) => {
+app.get("/api/artWorks/:id", async (req, res) => {
   try {
     const id = req.params.id;
-
-    if (!ObjectId.isValid(id)) {
-      return res.status(400).json({ message: "Invalid artwork id" });
-    }
+    console.log("Received ID:", id);
 
     const artwork = await artWorksCollection.findOne({
       _id: new ObjectId(id),
     });
+
+    console.log("Found artwork:", artwork);
 
     if (!artwork) {
       return res.status(404).json({
@@ -324,8 +323,12 @@ app.post("/api/artWorks" ,logger,
       });
     }
 
-    res.json(artwork);
+    res.json({
+      success: true,
+      data: artwork,
+    });
   } catch (error) {
+    console.log(error);
     res.status(500).json({
       success: false,
       message: error.message,
