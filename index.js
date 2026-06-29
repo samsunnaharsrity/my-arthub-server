@@ -59,54 +59,57 @@ async function run() {
     const draftCollection = database.collection("drafts")
     const sessionCollection = database.collection("session")
 
+    app.get("/check-session", async (req, res) => {
+  try {
+    const sessions = await sessionCollection
+      .find()
+      .limit(5)
+      .toArray();
+
+    res.send(sessions);
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
 
 
 
 // TOKEN VERIFICATIONS
-const verifyToken = async(req , res, next) =>{
+const verifyToken = async (req, res, next) => {
+  try {
 
-  console.log('headers' , req.headers);
-  const authHeader = req.headers?.authorization
-  if(!authHeader){
-    return res.status(401).send({message: ' unauthorized access'})
+    const email = req.headers["user-email"];
+
+    if (!email) {
+      return res.status(401).send({
+        success: false,
+        message: "Unauthorized access",
+      });
+    }
+
+    const user = await usersCollection.findOne({
+      email: email.trim().toLowerCase(),
+    });
+
+    if (!user) {
+      return res.status(401).send({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    req.user = user;
+    next();
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
   }
-
-  const token = authHeader.split(' ')[1]
-
-  if(!token){
-    return res.status(401).send({message: ' unauthorized access'})
-  }
-
-const query = {token: token}
-const session = await sessionCollection.findOne({
-  token,
-});
-
-if (!session) {
-  return res.status(401).send({
-    success: false,
-    message: "Invalid token",
-  });
-}
-
-console.log("SESSION:", session);
-
-const user = await usersCollection.findOne({
-  _id: new ObjectId(session.userId),
-});
-
-console.log("USER:", user);
-
-if (!user) {
-  return res.status(401).send({
-    success: false,
-    message: "User not found",
-  });
-}
-
-req.user = user;
-next();
-}
+};
 
 
 // VERIFY USERS
@@ -127,26 +130,52 @@ if (req.user?.role !== "user")  {
 // VERIFY ADMIN
 
 const verifyAdmin = async (req, res, next) => {
-  if (req.user?.role !== "admin") {
-    return res.status(403).send({
-      message: "forbidden access",
+  try {
+    const email = req.headers["user-email"];
+
+    if (!email) {
+      return res.status(401).send({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    const user = await usersCollection.findOne({ email });
+
+    if (!user || user.role !== "admin") {
+      return res.status(403).send({
+        success: false,
+        message: "Admin only",
+      });
+    }
+
+    req.user = user;
+    next();
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
     });
   }
-
-  next();
 };
 
 // VERIFY ARTIST
 
 const verifyArtist = async (req, res, next) => {
-  if (req.user?.role !== "artist") {
+  if (req.user.role !== "artist") {
     return res.status(403).send({
-      message: "forbidden access",
+      success: false,
+      message: "Forbidden access",
     });
   }
 
   next();
 };
+
+
+
+
+
 
 
 // user collection
@@ -159,7 +188,7 @@ app.post("/api/users", async (req, res) => {
     const existingUser = await usersCollection.findOne({
       email: userData.email
     });
-
+    
     if (existingUser) {
 
       if (!existingUser.planId) {
@@ -198,57 +227,10 @@ app.post("/api/users", async (req, res) => {
 });
 
 
-// app.get("/api/users", async (req, res) => {
-//   const { email } = req.query;
-
-//   const user = await usersCollection.findOne({
-//     email: email?.trim().toLowerCase()
-//   });
-
-//   if (!user) return res.send(null);
-
-//   return res.send({
-//     ...user,
-//     role: user.role || "user",
-//     plan: user.plan || "user_free",
-//     planId: user.planId || "user_free",
-//   });
-// });
-
-    // artWorks
-app.get("/api/artWorks", async (req, res) => {
-  try {
-    const { status, category } = req.query;
-
-    const query = {};
-
-    if (status) query.status = status;
-
-    if (category) {
-      query.category = {
-        $regex: new RegExp(`^${category}$`, "i"),
-      };
-    }
-
-    const result = await artWorksCollection
-      .find(query)
-      .sort({ createdAt: -1 })
-      .toArray();
-
-    res.send(result);
-  } catch (error) {
-    res.status(500).send({
-      success: false,
-      message: error.message,
-    });
-  }
-});
 
 
 
-app.get("/api/users",logger,
-  verifyToken,
-  verifyAdmin, async (req, res) => {
+app.get("/api/users",async (req, res) => {
   try {
     const { email } = req.query;
     if (email) {
@@ -276,58 +258,263 @@ app.get("/api/users",logger,
 });
 
 
+
+
+// USER PROFILE UPDATE DATA
+app.put("/api/user/update", verifyToken, async (req, res) => {
+  try {
+    const { name, image } = req.body;
+
+    const currentEmail = req.user.email;
+
+    // update
+    await usersCollection.updateOne(
+      { email: currentEmail },
+      {
+        $set: {
+          name,
+          image,
+          updatedAt: new Date(),
+        },
+      }
+    );
+
+    // updated user fetch
+    const updatedUser = await usersCollection.findOne({
+      email: currentEmail,
+    });
+
+    res.send({
+      success: true,
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.log(error);
+
+    res.status(500).send({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+
+
+
+// USER PURCHASE DELETE 
+app.delete("/api/purchase/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+
+    const result = await purchaseCollection.deleteOne({
+      _id: new ObjectId(id),
+    });
+
+    console.log(result);
+
+    res.send({
+      success: true,
+      deletedCount: result.deletedCount,
+    });
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+
+
+
 // ARTWORKS
-app.post("/api/artWorks" ,logger,
-  verifyToken,
-  verifyArtist, async (req, res) => {
-      try {
-        const artWork = req.body;
-        const newArtWork = {
-          ...artWork,
-          createdAt:new Date()
-        }
-        const result = await artWorksCollection.insertOne(newArtWork);
 
-        res.status(201).json({
-          success: true,
-          insertedId: result.insertedId,
-          message: "Artwork created successfully",
-        });
-      } catch (error) {
-        console.error(error);
+app.get("/api/artWorks", async (req, res) => {
+  try {
+    const { status, category } = req.query;
 
-        res.status(500).json({
+    const query = {};
+
+    if (status) {
+      query.status = status;
+    }
+
+    if (category) {
+      query.category = {
+        $regex: new RegExp(`^${category}$`, "i"),
+      };
+    }
+
+    const result = await artWorksCollection
+      .find(query)
+      .sort({ createdAt: -1 }) 
+      .toArray();
+
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+
+
+
+app.post("/api/artWorks",logger,verifyToken,verifyArtist,
+  async (req, res) => {
+    try {
+      const artwork = req.body;
+
+      if (!artwork.title || !artwork.image) {
+        return res.status(400).send({
           success: false,
-          message: error.message,
+          message: "Title and image are required",
         });
       }
+
+      const newArtwork = {
+        ...artwork,
+        artist: artwork.artist
+          ?.trim()
+          .toLowerCase(),
+
+        status: artwork.status || "pending",
+
+        createdAt: new Date(),
+      };
+
+      const result =
+        await artWorksCollection.insertOne(
+          newArtwork
+        );
+
+      res.send({
+        success: true,
+        insertedId: result.insertedId,
+        message: "Artwork created successfully",
+      });
+    } catch (error) {
+      console.log("CREATE ART ERROR:", error);
+
+      res.status(500).send({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+);
+
+
+
+// APPROVE ARTWORK
+app.patch("/api/artWorks/approve/:id",logger,verifyToken,verifyAdmin,
+  async (req, res) => {
+    try {
+      const id = req.params.id;
+
+      if (!ObjectId.isValid(id)) {
+        return res.status(400).send({
+          success: false,
+          message: "Invalid artwork id",
+        });
+      }
+
+      const result = await artWorksCollection.updateOne(
+        { _id: new ObjectId(id) },
+        {
+          $set: {
+            status: "approved",
+            approvedAt: new Date(),
+          },
+        }
+      );
+
+      res.send({
+      success: true,
+      modifiedCount: result.modifiedCount,
+      message: "Artwork approved",
     });
+    } catch (error) {
+      res.status(500).send({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+);
+
+
+
+// REJECT ARTWORK
+app.patch("/api/artWorks/reject/:id",logger,verifyToken,verifyAdmin,
+  async (req, res) => {
+    try {
+      const id = req.params.id;
+
+      if (!ObjectId.isValid(id)) {
+        return res.status(400).send({
+          success: false,
+          message: "Invalid artwork id",
+        });
+      }
+
+      const result = await artWorksCollection.updateOne(
+        { _id: new ObjectId(id) },
+        {
+          $set: {
+            status: "rejected",
+            rejectedAt: new Date(),
+          },
+        }
+      );
+
+      res.send({
+      success: true,
+      modifiedCount: result.modifiedCount,
+      message: "Artwork rejected",
+    });
+    } catch (error) {
+      res.status(500).send({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+);
+
+
 
 app.get("/api/artWorks/:id", async (req, res) => {
   try {
     const id = req.params.id;
-    console.log("Received ID:", id);
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({
+        success: false,
+        message: "Invalid artwork id",
+      });
+    }
 
     const artwork = await artWorksCollection.findOne({
       _id: new ObjectId(id),
     });
 
-    console.log("Found artwork:", artwork);
-
     if (!artwork) {
-      return res.status(404).json({
+      return res.status(404).send({
         success: false,
         message: "Artwork not found",
       });
     }
 
-    res.json({
+    res.send({
       success: true,
       data: artwork,
     });
+
   } catch (error) {
-    console.log(error);
-    res.status(500).json({
+    res.status(500).send({
       success: false,
       message: error.message,
     });
@@ -337,30 +524,59 @@ app.get("/api/artWorks/:id", async (req, res) => {
 
     // artist profile
 
-app.post("/api/artistProfile",logger,
-  verifyToken,
-  verifyArtist, async (req, res) => {
-try {
-  const artistProfile = req.body;
-  const newArtistProfile ={
-    ...artistProfile,
-    createdAt: new Date()
+app.post("/api/artistProfile", async (req, res) => {
+  try {
+    const data = req.body;
+    const email = data.email.trim().toLowerCase();
+
+    const { _id, ...updateData } = data;
+
+    const existing =
+      await artistProfileCollection.findOne({ email });
+
+    if (existing) {
+      await artistProfileCollection.updateOne(
+        { email },
+        {
+          $set: {
+            ...updateData,
+            updatedAt: new Date(),
+          },
+        }
+      );
+    } else {
+      await artistProfileCollection.insertOne({
+        ...updateData,
+        email,
+        createdAt: new Date(),
+      });
+    }
+
+    await usersCollection.updateOne(
+      { email },
+      {
+        $set: {
+          name: updateData.name,
+          image: updateData.photo,
+          updatedAt: new Date(),
+        },
+      }
+    );
+
+    const profile =
+      await artistProfileCollection.findOne({ email });
+
+    res.send({
+      success: true,
+      data: profile,
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
   }
-  const result = await artistProfileCollection.insertOne(newArtistProfile);
-
-  res.status(201).json({
-    success: true,
-    insertedId: result.insertedId,
-    message: "Artist Profile Created successfully",
-  });
-} catch (error) {
-  console.error(error);
-
-  res.status(500).json({
-    success: false,
-    message: error.message,
-  });
-}
 });
 
 // all artist profile
@@ -393,34 +609,43 @@ app.get("/api/artistProfile/all", async (req, res) => {
 });
 
 
-// artwork id
+app.patch("/api/artistProfile/:id", async (req, res) => {
+  const id = req.params.id;
+  const updatedData = req.body;
 
-// app.get("/api/artWorks/:id",verifyToken, async (req, res) => {
-//   try {
-//     const id = req.params.id;
+  // Artist Profile Update
+  await artistProfileCollection.updateOne(
+    { _id: new ObjectId(id) },
+    {
+      $set: updatedData,
+    }
+  );
 
-//     const artwork = await artWorksCollection.findOne({
-//       _id: new ObjectId(id),
-//     });
+  // User Collection Update
+  await usersCollection.updateOne(
+    { email: updatedData.email },
+    {
+      $set: {
+        name: updatedData.name,
+        image: updatedData.photo,
+      },
+    }
+  );
 
-//     if (!artwork) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Artwork not found",
-//       });
-//     }
 
-//     res.json(artwork);
-//   } catch (error) {
-//     console.error(error);
+  
 
-//     res.status(500).json({
-//       success: false,
-//       message: "Invalid ID or server error",
-//     });
-//   }
-// });
+  // Updated profile fetch
+  const updatedProfile =
+    await artistProfileCollection.findOne({
+      _id: new ObjectId(id),
+    });
 
+  res.send({
+    success: true,
+    data: updatedProfile,
+  });
+});
 
 
   //PURCHASE ARTS 
@@ -499,7 +724,7 @@ app.post("/api/purchase",logger,  verifyToken,
 
     const result = await purchaseCollection.insertOne(newPurchase);
 
-    console.log("INSERT RESULT:", result.insertedId); // 🔥 DEBUG
+    console.log("INSERT RESULT:", result.insertedId); 
 
     res.send({
       success: true,
@@ -650,6 +875,8 @@ app.get("/api/comments", async (req, res) => {
 
 app.post("/api/comments", async (req, res) => {
   try {
+    console.log("COMMENT BODY:", req.body);
+
     const {
       artworkId,
       text,
@@ -659,29 +886,33 @@ app.post("/api/comments", async (req, res) => {
       parentId = null,
     } = req.body;
 
-    if (!artworkId || !text) {
+    if (!artworkId || !text || !userId) {
       return res.status(400).send({
         success: false,
-        message: "artworkId and text required",
+        message: "artworkId, text and userId required",
       });
     }
 
-const newComment = {
-  artworkId: String(artworkId),
-  text,
-  userId,
-  userName: userName || "Anonymous",
-  userAvatar: userAvatar || "",
-  parentId: parentId ? String(parentId) : null,
-  likes: [],
-  createdAt: new Date(),
-};
+    const newComment = {
+      artworkId: String(artworkId),
+      text,
+      userId: String(userId),
+      userName: userName || "Anonymous",
+      userAvatar: userAvatar || "",
+      parentId: parentId ? String(parentId) : null,
+      likes: [],
+      createdAt: new Date(),
+    };
 
-    const result = await commentsCollection.insertOne(newComment);
+    const result =
+      await commentsCollection.insertOne(newComment);
 
     res.send({
       success: true,
-      comment: { ...newComment, _id: result.insertedId },
+      comment: {
+        ...newComment,
+        _id: result.insertedId,
+      },
     });
   } catch (error) {
     res.status(500).send({
@@ -720,27 +951,52 @@ app.get("/api/comments/user/:userId", async (req, res) => {
 
 app.post("/api/comments/like", async (req, res) => {
   try {
-    const { commentId, userId } = req.body;
+    let { commentId, userId } = req.body;
 
     if (!commentId || !userId) {
-      return res.status(400).send({ success: false, message: "commentId and userId required" });
+      return res.status(400).send({
+        success: false,
+        message: "commentId and userId required",
+      });
     }
 
-    const comment = await commentsCollection.findOne({ _id: new ObjectId(commentId) });
+    userId = userId.trim().toLowerCase();
+
+    const comment = await commentsCollection.findOne({
+      _id: new ObjectId(commentId),
+    });
+
     if (!comment) {
-      return res.status(404).send({ success: false, message: "Comment not found" });
+      return res.status(404).send({
+        success: false,
+        message: "Comment not found",
+      });
     }
-    const isLiked = comment.likes?.includes(userId);
-    const updateDoc = isLiked 
-      ? { $pull: { likes: userId } } 
+
+    const isLiked = (comment.likes || []).includes(userId);
+
+    const updateDoc = isLiked
+      ? { $pull: { likes: userId } }
       : { $addToSet: { likes: userId } };
 
-    await commentsCollection.updateOne({ _id: new ObjectId(commentId) }, updateDoc);
-    const updatedComment = await commentsCollection.findOne({ _id: new ObjectId(commentId) });
+    await commentsCollection.updateOne(
+      { _id: new ObjectId(commentId) },
+      updateDoc
+    );
 
-    res.send({ success: true, likes: updatedComment.likes });
+    const updatedComment = await commentsCollection.findOne({
+      _id: new ObjectId(commentId),
+    });
+
+    res.send({
+      success: true,
+      likes: updatedComment.likes || [],
+    });
   } catch (error) {
-    res.status(500).send({ success: false, message: error.message });
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
   }
 });
 
@@ -809,8 +1065,7 @@ app.get("/api/users/:email", async (req, res) => {
 
 // UPDATE USER
 
-app.patch("/api/users/:id",logger,
-  verifyToken,
+app.patch("/api/users/:id",
   verifyAdmin, async (req, res) => {
   try {
     const id = req.params.id;
@@ -821,6 +1076,8 @@ app.patch("/api/users/:id",logger,
       {
         $set: {
           role,
+          updatedAt: new Date(),
+
         },
       }
     );
@@ -873,67 +1130,39 @@ app.patch("/api/artWorks/:id", logger,
   res.send(result);
 });
 
-// APPROVE REJECT AND DELETE
-
-app.patch("/api/artWorks/approve/:id",logger,
-  verifyToken,
-  verifyAdmin, async (req, res) => {
-  const id = req.params.id;
-
-  const result = await artWorksCollection.updateOne(
-    { _id: new ObjectId(id) },
-    {
-      $set: {
-        status: "approved",
-      },
-    }
-  );
-
-  res.send(result);
-});
 
 
-app.patch("/api/artWorks/reject/:id",logger,
-  verifyToken,
-  verifyAdmin, async (req, res) => {
-  const id = req.params.id;
-
-  const result = await artWorksCollection.updateOne(
-    { _id: new ObjectId(id) },
-    {
-      $set: {
-        status: "rejected",
-      },
-    }
-  );
-
-  res.send(result);
-});
 
 
-// SETTINGS
-
+// GET SETTINGS 
 app.get("/api/settings", async (req, res) => {
   try {
-    const settings = await settingsCollection.findOne({ type: "site_settings" });
+    const settings = await settingsCollection.findOne({
+      type: "site_settings",
+    });
 
-    if (!settings) {
-      return res.send({
-        siteName: "ArtHub",
-        contactEmail: "admin@arthub.com",
-        currency: "USD",
-        maintenanceMode: false,
-        autoApproveArtwork: false,
-      });
+    // SAFE DEFAULT (NEVER FAIL FRONTEND)
+    const defaultSettings = {
+      siteName: "ArtHub",
+      contactEmail: "admin@arthub.com",
+      currency: "USD",
+      maintenanceMode: false,
+      autoApproveArtwork: false,
+    };
+
+    if (!settings || !settings.data) {
+      return res.send(defaultSettings);
     }
 
+    const data = settings.data;
+
     res.send({
-  siteName: settings.data.siteName,
-  contactEmail: settings.data.contactEmail,
-  currency: settings.data.currency,
-  maintenanceMode: settings.data.maintenanceMode,
-  autoApproveArtwork: settings.data.autoApproveArtwork,
-});
+      siteName: data.siteName ?? defaultSettings.siteName,
+      contactEmail: data.contactEmail ?? defaultSettings.contactEmail,
+      currency: data.currency ?? defaultSettings.currency,
+      maintenanceMode: data.maintenanceMode ?? false,
+      autoApproveArtwork: data.autoApproveArtwork ?? false,
+    });
   } catch (error) {
     res.status(500).send({
       success: false,
@@ -942,6 +1171,9 @@ app.get("/api/settings", async (req, res) => {
   }
 });
 
+
+
+// SAVE SETTINGS 
 app.post("/api/settings", async (req, res) => {
   try {
     const data = req.body;
@@ -951,7 +1183,13 @@ app.post("/api/settings", async (req, res) => {
       {
         $set: {
           type: "site_settings",
-          data,
+          data: {
+            siteName: data.siteName,
+            contactEmail: data.contactEmail,
+            currency: data.currency,
+            maintenanceMode: data.maintenanceMode,
+            autoApproveArtwork: data.autoApproveArtwork,
+          },
           updatedAt: new Date(),
         },
       },
@@ -972,6 +1210,7 @@ app.post("/api/settings", async (req, res) => {
 });
 
 
+
 // ADMIN ARTWORKS
 app.get("/api/admin/artworks", async (req, res) => {
   const artworks = await artWorksCollection
@@ -981,6 +1220,8 @@ app.get("/api/admin/artworks", async (req, res) => {
 
   res.send(artworks);
 });
+
+
 
 app.delete("/api/admin/artworks/:id",logger,
   verifyToken,
@@ -994,6 +1235,8 @@ app.delete("/api/admin/artworks/:id",logger,
     result,
   });
 });
+
+
 
 // ANALYTICS DATA
 app.get("/api/analytics/categories", async (req, res) => {
@@ -1037,6 +1280,8 @@ app.get("/api/analytics/categories", async (req, res) => {
   }
 });
 
+
+
 // SALES CATEGORY
 app.get("/api/analytics/sales", async (req, res) => {
   try {
@@ -1078,94 +1323,89 @@ app.get("/api/analytics/sales", async (req, res) => {
 
 
 // transaction data 
-app.get("/api/transactions",logger,
+app.get("/api/transactions",
+  logger,
   verifyToken,
-  verifyAdmin, async (req, res) => {
-  try {
-    const { page = 1, limit = 10, type } = req.query;
+  verifyAdmin,
+  async (req, res) => {
+    try {
+      const { page = 1, limit = 10, type } = req.query;
 
-    const pageNum = Number(page);
-    const limitNum = Number(limit);
-    const skip = (pageNum - 1) * limitNum;
+      const pageNum = Number(page);
+      const limitNum = Number(limit);
+      const skip = (pageNum - 1) * limitNum;
 
-    const pipeline = [
-      // Purchase Collection
-      {
-        $project: {
-          _id: 1,
-          type: { $literal: "purchase" },
-          email: { $ifNull: ["$buyerEmail", "$userEmail"] },
-          amount: { $ifNull: ["$amount", "$price"] },
-          planId: { $literal: null },
-          createdAt: 1,
+      const pipeline = [
+        {
+          $project: {
+            _id: 1,
+            type: { $literal: "purchase" },
+            email: { $ifNull: ["$buyerEmail", "$userEmail"] },
+            amount: { $ifNull: ["$amount", "$price"] },
+            planId: { $literal: null },
+            createdAt: 1,
+          },
         },
-      },
 
-      // Subscription Collection
-      {
-        $unionWith: {
-          coll: "subscription",
-          pipeline: [
-            {
-              $project: {
-                _id: 1,
-                type: { $literal: "subscription" },
-                email: "$email",
-                amount: { $ifNull: ["$amount", 0] },
-                planId: "$planId",
-                createdAt: 1,
+        {
+          $unionWith: {
+            coll: "subscription",
+            pipeline: [
+              {
+                $project: {
+                  _id: 1,
+                  type: { $literal: "subscription" },
+                  email: "$email",
+                  amount: { $ifNull: ["$amount", 0] },
+                  planId: "$planId",
+                  createdAt: 1,
+                },
               },
-            },
-          ],
+            ],
+          },
         },
-      },
-    ];
+      ];
 
-    // Filter
-    if (type) {
-      pipeline.push({
-        $match: { type },
+      if (type) {
+        pipeline.push({
+          $match: { type },
+        });
+      }
+
+      const countResult = await purchaseCollection
+        .aggregate([...pipeline, { $count: "total" }])
+        .toArray();
+
+      const total = countResult[0]?.total || 0;
+
+      const items = await purchaseCollection
+        .aggregate([
+          ...pipeline,
+          { $sort: { createdAt: -1 } },
+          { $skip: skip },
+          { $limit: limitNum },
+        ])
+        .toArray();
+
+      res.send({
+        success: true,
+        total,
+        page: pageNum,
+        limit: limitNum,
+        items,
+      });
+    } catch (error) {
+      res.status(500).send({
+        success: false,
+        message: error.message,
       });
     }
-
-    // Total Count
-    const countResult = await purchaseCollection
-      .aggregate([...pipeline, { $count: "total" }])
-      .toArray();
-
-    const total = countResult[0]?.total || 0;
-
-    // Pagination
-    const items = await purchaseCollection
-      .aggregate([
-        ...pipeline,
-        { $sort: { createdAt: -1 } },
-        { $skip: skip },
-        { $limit: limitNum },
-      ])
-      .toArray();
-
-    res.send({
-      success: true,
-      total,
-      page: pageNum,
-      limit: limitNum,
-      items,
-    });
-  } catch (error) {
-    console.log(error);
-
-    res.status(500).send({
-      success: false,
-      message: error.message,
-    });
   }
-});
+);
+
 
 // ADMIN DASHBOARD
-app.get("/api/analytics/overview",logger,
-  verifyToken,
-  verifyAdmin, async (req, res) => {
+app.get("/api/analytics/overview", async (req, res) => {
   try {
     const totalUsers =
       await usersCollection.countDocuments();
@@ -1177,18 +1417,18 @@ app.get("/api/analytics/overview",logger,
       await purchaseCollection.countDocuments();
 
     const revenueResult =
-      await purchaseCollection.aggregate([
-        {
-          $group: {
-            _id: null,
-            totalRevenue: {
-              $sum: {
-                $toDouble: "$price",
+      await purchaseCollection
+        .aggregate([
+          {
+            $group: {
+              _id: null,
+              totalRevenue: {
+                $sum: "$price",
               },
             },
           },
-        },
-      ]).toArray();
+        ])
+        .toArray();
 
     const totalRevenue =
       revenueResult[0]?.totalRevenue || 0;
@@ -1200,6 +1440,8 @@ app.get("/api/analytics/overview",logger,
       totalRevenue,
     });
   } catch (error) {
+    console.log("ANALYTICS ERROR:", error);
+
     res.status(500).send({
       success: false,
       message: error.message,
@@ -1209,22 +1451,20 @@ app.get("/api/analytics/overview",logger,
 
 // ADMIN COMMENTS ID
 
-app.get("/api/admin/comments",logger,
+app.get("/api/admin/comments",
+  logger,
   verifyToken,
-  verifyAdmin, async (req, res) => {
-  try {
+  verifyAdmin,
+  async (req, res) => {
+
     const comments = await commentsCollection
       .find()
       .sort({ createdAt: -1 })
       .toArray();
 
+    console.log("COMMENTS:", comments);
+
     res.send(comments);
-  } catch (error) {
-    res.status(500).send({
-      success: false,
-      message: error.message,
-    });
-  }
 });
 
 // USER COMMENT
@@ -1310,104 +1550,114 @@ app.get("/api/artist/home-dashboard", async (req, res) => {
   }
 });
 
-// DRAFTED DATA
-app.post("/api/drafts", async (req, res) => {
-  try {
-    const favorite = req.body;
+// ARTIST DRAFTED DATA
+app.post("/api/drafts",
+  logger,
+  verifyToken,
+  async (req, res) => {
+    try {
+      const draft = req.body;
 
-    const exists = await draftCollection.findOne({
-      userEmail: favorite.userEmail,
-      artworkId: favorite.artworkId,
-    });
+      if (!draft.userEmail || !draft.artworkId) {
+        return res.status(400).send({
+          success: false,
+          message: "userEmail and artworkId required",
+        });
+      }
 
-    if (exists) {
-      return res.status(409).send({
+      const exists = await draftCollection.findOne({
+        userEmail: draft.userEmail.trim().toLowerCase(),
+        artworkId: String(draft.artworkId),
+      });
+
+      if (exists) {
+        return res.status(409).send({
+          success: false,
+          message: "Artwork already saved",
+        });
+      }
+
+      const newDraft = {
+        ...draft,
+        userEmail: draft.userEmail.trim().toLowerCase(),
+        artworkId: String(draft.artworkId),
+        createdAt: new Date(),
+      };
+
+      const result =
+        await draftCollection.insertOne(newDraft);
+
+      res.send({
+        success: true,
+        insertedId: result.insertedId,
+      });
+    } catch (error) {
+      res.status(500).send({
         success: false,
-        message: "Artwork already in favorites",
+        message: error.message,
       });
     }
-
-    favorite.createdAt = new Date();
-
-    const result = await favoriteCollection.insertOne(
-      favorite
-    );
-
-    res.send({
-      success: true,
-      insertedId: result.insertedId,
-    });
-  } catch (error) {
-    res.status(500).send({
-      success: false,
-      message: error.message,
-    });
   }
-});
+);
 
+app.get("/api/drafts",logger,verifyToken,
+  async (req, res) => {
+    try {
+      const email = req.query.email;
 
+      if (!email) {
+        return res.status(400).send({
+          success: false,
+          message: "Email required",
+        });
+      }
 
-app.get("/api/drafts", async (req, res) => {
-  try {
-    const email = req.query.email;
+      const drafts = await draftCollection
+        .find({
+          userEmail: email.trim().toLowerCase(),
+        })
+        .sort({ createdAt: -1 })
+        .toArray();
 
-    const favorites = await draftCollection
-      .find({ userEmail: email })
-      .sort({ createdAt: -1 })
-      .toArray();
-
-    res.send(favorites);
-  } catch (error) {
-    res.status(500).send({
-      success: false,
-      message: error.message,
-    });
+      res.send({
+        success: true,
+        items: drafts,
+      });
+    } catch (error) {
+      res.status(500).send({
+        success: false,
+        message: error.message,
+      });
+    }
   }
-});
+);
 
+app.delete("/api/drafts/:id",logger,verifyToken,
+  async (req, res) => {
+    try {
+      const id = req.params.id;
 
-app.delete("/api/drafts/:id", async (req, res) => {
-  try {
-    const id = req.params.id;
+      const result = await draftCollection.deleteOne({
+        _id: new ObjectId(id),
+      });
 
-    const result = await draftCollection.deleteOne({
-      _id: new ObjectId(id),
-    });
-
-    res.send({
-      success: true,
-      deletedCount: result.deletedCount,
-    });
-  } catch (error) {
-    res.status(500).send({
-      success: false,
-      message: error.message,
-    });
+      res.send({
+        success: true,
+        deletedCount: result.deletedCount,
+      });
+    } catch (error) {
+      res.status(500).send({
+        success: false,
+        message: error.message,
+      });
+    }
   }
-});
+);
 
-app.get("/api/purchase", async (req, res) => {
-  const userId = req.query.userId;
-  const page = Number(req.query.page) || 1;
-  const limit = Number(req.query.limit) || 6;
 
-  const skip = (page - 1) * limit;
 
-  const query = { userId };
 
-  const total = await purchaseCollection.countDocuments(query);
 
-  const items = await purchaseCollection
-    .find(query)
-    .skip(skip)
-    .limit(limit)
-    .toArray();
-
-  res.send({
-    items,
-    total,
-  });
-});
 
 app.get("/api/artist/:id", async (req, res) => {
   try {
@@ -1428,171 +1678,7 @@ app.get("/api/artist/:id", async (req, res) => {
 });
 
 
-// UPDATE USER PROFILE
 
-app.put("/api/user/update", async (req, res) => {
-  try {
-    const { name, email, image } = req.body;
-
-    console.log("Received email:", email);
-
-    const existingUser = await usersCollection.findOne({
-      email: email.trim().toLowerCase(),
-    });
-
-    console.log("Existing user:", existingUser);
-
-    if (!existingUser) {
-      return res.status(404).send({
-        success: false,
-        error: "User not found",
-      });
-    }
-
-    const result = await usersCollection.findOneAndUpdate(
-      {
-        email: email.trim().toLowerCase(),
-      },
-      {
-        $set: {
-          name,
-          image,
-          updatedAt: new Date(),
-        },
-      },
-      {
-        returnDocument: "after",
-      }
-    );
-
-    res.send({
-      success: true,
-      user: result,
-    });
-  } catch (error) {
-    console.log(error);
-
-    res.status(500).send({
-      success: false,
-      error: error.message,
-    });
-  }
-});
-
-
-app.get("/api/artistProfile", async (req, res) => {
-  try {
-    const { email } = req.query;
-
-    if (!email) {
-      return res.status(400).send({
-        success: false,
-        message: "Email is required",
-      });
-    }
-
-    const profile =
-      await artistProfileCollection.findOne({
-        email: email.trim().toLowerCase(),
-      });
-
-    res.send(profile);
-  } catch (error) {
-    res.status(500).send({
-      success: false,
-      message: error.message,
-    });
-  }
-});
-
-app.post("/api/artistProfile",
-  logger,
-  verifyToken,
-  verifyArtist,
-  async (req, res) => {
-    try {
-      const artistProfile = req.body;
-
-      const existingProfile =
-        await artistProfileCollection.findOne({
-          email: artistProfile.email
-            .trim()
-            .toLowerCase(),
-        });
-
-      let profile;
-
-      // Update profile if already exists
-      if (existingProfile) {
-        await artistProfileCollection.updateOne(
-          {
-            email: artistProfile.email
-              .trim()
-              .toLowerCase(),
-          },
-          {
-            $set: {
-              ...artistProfile,
-              updatedAt: new Date(),
-            },
-          }
-        );
-
-        profile =
-          await artistProfileCollection.findOne({
-            email: artistProfile.email
-              .trim()
-              .toLowerCase(),
-          });
-      }
-
-      // Create new profile
-      else {
-        const result =
-          await artistProfileCollection.insertOne({
-            ...artistProfile,
-            email: artistProfile.email
-              .trim()
-              .toLowerCase(),
-            createdAt: new Date(),
-          });
-
-        profile =
-          await artistProfileCollection.findOne({
-            _id: result.insertedId,
-          });
-      }
-
-      // Update user collection
-      await usersCollection.updateOne(
-        {
-          email: artistProfile.email
-            .trim()
-            .toLowerCase(),
-        },
-        {
-          $set: {
-            name: artistProfile.name,
-            image: artistProfile.photo,
-            updatedAt: new Date(),
-          },
-        }
-      );
-
-      res.send({
-        success: true,
-        data: profile,
-      });
-    } catch (error) {
-      console.log(error);
-
-      res.status(500).send({
-        success: false,
-        message: error.message,
-      });
-    }
-  }
-);
 
 app.get("/api/artistProfile", async (req, res) => {
   try {
@@ -1611,6 +1697,9 @@ app.get("/api/artistProfile", async (req, res) => {
     res.status(500).send({ message: error.message });
   }
 });
+
+
+
 app.post("/api/artistProfile", logger, verifyToken, verifyArtist, async (req, res) => {
   try {
     const data = req.body;
@@ -1649,6 +1738,31 @@ app.post("/api/artistProfile", logger, verifyToken, verifyArtist, async (req, re
     res.status(500).send({ message: error.message });
   }
 });
+
+
+// ARTIST SALES HISTORY DELETE
+app.delete("/api/purchase/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+
+    await Purchase.findByIdAndDelete(id);
+
+    res.json({
+      success: true,
+      message: "Deleted successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Delete failed",
+    });
+  }
+});
+
+
+
+
+
 
     await client.db("admin").command({ ping: 1 });
 
