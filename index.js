@@ -1777,6 +1777,10 @@ app.delete("/api/purchase/:id", async (req, res) => {
 // app.listen(port, () => {
 //   console.log(`Example app listening on port ${port}`);
 // });
-run().catch(console.dir);
-
+if (require.main === module) {
+  app.listen(port, () => {
+    console.log(`Server listening on port ${port}`);
+  });
+}
+ 
 module.exports = app;
