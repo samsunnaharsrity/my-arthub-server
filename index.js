@@ -8,7 +8,7 @@ app.use(
   cors({
     origin: [
       "http://localhost:3000",
-      "https://your-vercel-app.vercel.app",
+      "https://my-arthub.vercel.app"
     ],
     credentials: true,
   })
@@ -524,60 +524,60 @@ app.get("/api/artWorks/:id", async (req, res) => {
 
     // artist profile
 
-app.post("/api/artistProfile", async (req, res) => {
-  try {
-    const data = req.body;
-    const email = data.email.trim().toLowerCase();
+// app.post("/api/artistProfile", async (req, res) => {
+//   try {
+//     const data = req.body;
+//     const email = data.email.trim().toLowerCase();
 
-    const { _id, ...updateData } = data;
+//     const { _id, ...updateData } = data;
 
-    const existing =
-      await artistProfileCollection.findOne({ email });
+//     const existing =
+//       await artistProfileCollection.findOne({ email });
 
-    if (existing) {
-      await artistProfileCollection.updateOne(
-        { email },
-        {
-          $set: {
-            ...updateData,
-            updatedAt: new Date(),
-          },
-        }
-      );
-    } else {
-      await artistProfileCollection.insertOne({
-        ...updateData,
-        email,
-        createdAt: new Date(),
-      });
-    }
+//     if (existing) {
+//       await artistProfileCollection.updateOne(
+//         { email },
+//         {
+//           $set: {
+//             ...updateData,
+//             updatedAt: new Date(),
+//           },
+//         }
+//       );
+//     } else {
+//       await artistProfileCollection.insertOne({
+//         ...updateData,
+//         email,
+//         createdAt: new Date(),
+//       });
+//     }
 
-    await usersCollection.updateOne(
-      { email },
-      {
-        $set: {
-          name: updateData.name,
-          image: updateData.photo,
-          updatedAt: new Date(),
-        },
-      }
-    );
+//     await usersCollection.updateOne(
+//       { email },
+//       {
+//         $set: {
+//           name: updateData.name,
+//           image: updateData.photo,
+//           updatedAt: new Date(),
+//         },
+//       }
+//     );
 
-    const profile =
-      await artistProfileCollection.findOne({ email });
+//     const profile =
+//       await artistProfileCollection.findOne({ email });
 
-    res.send({
-      success: true,
-      data: profile,
-    });
-  } catch (error) {
-    console.log(error);
-    res.status(500).send({
-      success: false,
-      message: error.message,
-    });
-  }
-});
+//     res.send({
+//       success: true,
+//       data: profile,
+//     });
+//   } catch (error) {
+//     console.log(error);
+//     res.status(500).send({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// });
 
 // all artist profile
 
@@ -1771,9 +1771,12 @@ app.delete("/api/purchase/:id", async (req, res) => {
     console.error(error);
   }
 }
+// run().catch(console.dir);
+
+
+// app.listen(port, () => {
+//   console.log(`Example app listening on port ${port}`);
+// });
 run().catch(console.dir);
 
-
-app.listen(port, () => {
-  console.log(`Example app listening on port ${port}`);
-});
+module.exports = app;
