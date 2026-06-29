@@ -43,9 +43,9 @@ const client = new MongoClient(uri, {
   }
 });
 
-async function run() {
-  try {
-    await client.connect();
+// async function run() {
+//   try {
+//     await client.connect();
 
     const database = client.db("arthub");
     const artWorksCollection = database.collection("artWorks");
@@ -1764,14 +1764,14 @@ app.delete("/api/purchase/:id", async (req, res) => {
 
 
 
-    await client.db("admin").command({ ping: 1 });
+    // await client.db("admin").command({ ping: 1 });
 
-    console.log("MongoDB Connected");
-  } catch (error) {
-    console.error(error);
-  }
-}
-run().catch(console.dir);
+//     console.log("MongoDB Connected");
+//   } catch (error) {
+//     console.error(error);
+//   }
+// }
+// run().catch(console.dir);
 
 
 app.listen(port, () => {
