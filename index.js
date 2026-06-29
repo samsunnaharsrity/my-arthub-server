@@ -1771,7 +1771,7 @@ app.delete("/api/purchase/:id", async (req, res) => {
     console.error(error);
   }
 }
-// run().catch(console.dir);
+run().catch(console.dir);
 
 
 // app.listen(port, () => {
