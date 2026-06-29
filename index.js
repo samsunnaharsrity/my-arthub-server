@@ -1289,7 +1289,7 @@ app.get("/api/analytics/sales", async (req, res) => {
     const result = await purchaseCollection.aggregate([
       {
         $match: {
-          createdAt: { $exists: true }
+          createdAt: { $exists: true, $type: "date" }
         }
       },
       {
@@ -1310,13 +1310,12 @@ app.get("/api/analytics/sales", async (req, res) => {
           totalSales: 1,
         },
       },
-      {
-        $sort: { date: 1 },
-      },
+      { $sort: { date: 1 } },
     ]).toArray();
 
     res.send(result);
   } catch (error) {
+    console.log("SALES ERROR:", error);
     res.status(500).send({ message: error.message });
   }
 });
