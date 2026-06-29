@@ -705,12 +705,13 @@ app.post("/api/purchase",logger,  verifyToken,
       buyerEmail: email,
     });
 
-    if (alreadyPurchased) {
-      return res.status(409).send({
-        success: false,
-        message: "Already purchased",
-      });
-    }
+   if (alreadyPurchased) {
+  return res.status(409).send({
+    success: false,
+    code: "ALREADY_PURCHASED",
+    message: "You have already purchased this artwork",
+  });
+} 
 
     const newPurchase = {
       artworkId,
