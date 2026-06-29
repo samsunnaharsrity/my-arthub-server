@@ -1741,23 +1741,23 @@ app.post("/api/artistProfile", logger, verifyToken, verifyArtist, async (req, re
 
 
 // ARTIST SALES HISTORY DELETE
-app.delete("/api/purchase/:id", async (req, res) => {
-  try {
-    const id = req.params.id;
+// app.delete("/api/purchase/:id", async (req, res) => {
+//   try {
+//     const id = req.params.id;
 
-    await Purchase.findByIdAndDelete(id);
+//     await purchase.findByIdAndDelete(id);
 
-    res.json({
-      success: true,
-      message: "Deleted successfully",
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Delete failed",
-    });
-  }
-});
+//     res.json({
+//       success: true,
+//       message: "Deleted successfully",
+//     });
+//   } catch (error) {
+//     res.status(500).json({
+//       success: false,
+//       message: "Delete failed",
+//     });
+//   }
+// });
 
 
 
